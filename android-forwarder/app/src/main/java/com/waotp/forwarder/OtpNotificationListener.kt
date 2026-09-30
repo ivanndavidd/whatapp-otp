@@ -9,6 +9,11 @@ import org.json.JSONObject
 import java.io.OutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.KeyFactory
+import java.security.PrivateKey
+import java.security.Signature
+import java.security.spec.PKCS8EncodedKeySpec
+import java.util.Base64
 import java.util.concurrent.Executors
 
 /**
@@ -20,72 +25,175 @@ import java.util.concurrent.Executors
  */
 class OtpNotificationListener : NotificationListenerService() {
 
-    private val executor = Executors.newSingleThreadExecutor()
+    private val executor =
+        Executors.newSingleThreadExecutor()
 
-    override fun onNotificationPosted(sbn: StatusBarNotification) {
+    override fun onNotificationPosted(
+        sbn: StatusBarNotification
+    ) {
+
         val pkg = sbn.packageName
+
         if (pkg !in ALLOWED_PACKAGES) return
 
-        val extras = sbn.notification.extras
+        val extras =
+            sbn.notification.extras
 
-        val channelId = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            sbn.notification.channelId.orEmpty()
-        } else {
-            ""
-        }
+        val channelId =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                sbn.notification.channelId.orEmpty()
+            } else {
+                ""
+            }
+
         // simSlot = 0 -> Sim Card Pertama
         // simSlot = 1 -> Sim Card Kedua
-        val simSlot = Regex("slot(\\d+)", RegexOption.IGNORE_CASE)
-            .find(channelId)
-            ?.groupValues
-            ?.get(1)
-            ?.toIntOrNull()
+        val simSlot =
+            Regex(
+                "slot(\\d+)",
+                RegexOption.IGNORE_CASE
+            )
+                .find(channelId)
+                ?.groupValues
+                ?.get(1)
+                ?.toIntOrNull()
 
-        Log.d(TAG, "Channel = $channelId")
-        Log.d(TAG, "SIM Slot = $simSlot")
+        Log.d(
+            TAG,
+            "Channel = $channelId"
+        )
 
-        val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: ""
-        val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()
-            ?: extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString()
-            ?: ""
+        Log.d(
+            TAG,
+            "SIM Slot = $simSlot"
+        )
+
+        val title =
+            extras.getCharSequence(
+                Notification.EXTRA_TITLE
+            )?.toString() ?: ""
+
+        val text =
+            extras.getCharSequence(
+                Notification.EXTRA_TEXT
+            )?.toString()
+                ?: extras.getCharSequence(
+                    Notification.EXTRA_BIG_TEXT
+                )?.toString()
+                ?: ""
 
         if (text.isBlank()) return
-        if (title.isBlank() && text.startsWith("Checking")) return
 
-        forward(title, text, pkg, sbn.postTime, simSlot)
-    }
-
-    private fun forward(title: String, text: String, pkg: String, postedAt: Long, simSlot: Int?) {
-        val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
-        val storedUrl = prefs.getString("server_url", null) ?: return
-        val serverUrl = resolveIngestUrl(storedUrl)
-        if (serverUrl.isEmpty()) return
-        
-        // Ambil data
-        val phone1 = prefs.getString("phone1", "") ?: ""
-        val phone2 = prefs.getString("phone2", "") ?: ""
-        val waType1 = prefs.getString("wa_type1", "none") ?: "none"
-        val waType2 = prefs.getString("wa_type2", "none") ?: "none"
-        val token = prefs.getString("token", "") ?: ""
-        if (token.isBlank()) {
-            // Tanpa token server selalu menjawab 401, jadi mengirim tetap berarti
-            // meneruskan isi OTP tanpa kredensial untuk hasil yang sama. Konfigurasi
-            // lama bisa masih menyimpan token kosong karena dulu field ini opsional.
-            Log.w(TAG, "Token belum diisi — notifikasi tidak diteruskan")
+        if (
+            title.isBlank() &&
+            text.startsWith("Checking")
+        ) {
             return
         }
 
+        forward(
+            title = title,
+            text = text,
+            pkg = pkg,
+            postedAt = sbn.postTime,
+            simSlot = simSlot
+        )
+    }
+
+    private fun forward(
+        title: String,
+        text: String,
+        pkg: String,
+        postedAt: Long,
+        simSlot: Int?
+    ) {
+
+        val prefs = getSharedPreferences(
+                        PREFS,
+                        MODE_PRIVATE
+                    )
+
+        val storedUrl = prefs.getString(
+                            "server_url",
+                            null
+                        ) ?: return
+
+        val serverUrl = resolveIngestUrl(storedUrl)
+
+        if (serverUrl.isEmpty()) return
+
+        // DEVICE CREDENTIAL
+        val deviceId =
+            prefs.getString(
+                "device_id",
+                ""
+            ) ?: ""
+
+        val privateKey =
+            prefs.getString(
+                "private_key",
+                ""
+            ) ?: ""
+
+        if (deviceId.isBlank()) {
+            Log.w(
+                TAG,
+                "Device ID belum diisi — notifikasi tidak diteruskan"
+            )
+            return
+        }
+
+        if (privateKey.isBlank()) {
+            Log.w(
+                TAG,
+                "Private Key belum diisi — notifikasi tidak diteruskan"
+            )
+
+            return
+        }
+
+        // Ambil data
+
+        val phone1 =
+            prefs.getString(
+                "phone1",
+                ""
+            ) ?: ""
+
+        val phone2 =
+            prefs.getString(
+                "phone2",
+                ""
+            ) ?: ""
+
+        val waType1 =
+            prefs.getString(
+                "wa_type1",
+                "none"
+            ) ?: "none"
+
+        val waType2 =
+            prefs.getString(
+                "wa_type2",
+                "none"
+            ) ?: "none"
 
         var matchedPhone = phone1 // Default nya SIM 1
-
+        
         if (pkg == "com.whatsapp") {
             // Cek nomor mana yang WA biasa
-            if (waType1 == "personal") matchedPhone = phone1
-            else if (waType2 == "personal") matchedPhone = phone2
+            if (waType1 == "personal") {
+                matchedPhone = phone1
+            } else if (waType2 == "personal") {
+                matchedPhone = phone2
+            }
         } else if (pkg == "com.whatsapp.w4b") {
             // Cek nomor mana yang WA Business
-            if (waType1 == "business") matchedPhone = phone1
-            else if (waType2 == "business") matchedPhone = phone2
+            if (waType1 == "business") {
+                matchedPhone = phone1
+            } else if (waType2 == "business") {
+                matchedPhone = phone2
+            }
         } else {
             // Cek nomor mana yang dapat SMS berdasarkan SIM Slot
             if (simSlot == 1) {
@@ -100,40 +208,161 @@ class OtpNotificationListener : NotificationListenerService() {
         }
 
         executor.execute {
+
             try {
-                val body = JSONObject().apply {
-                    put("phone", matchedPhone)
-                    put("title", title)
-                    put("text", text)
-                    put("packageName", pkg)
-                    put("postedAt", postedAt)
-                }.toString()
 
-                val conn = (URL(serverUrl).openConnection() as HttpURLConnection).apply {
-                    requestMethod = "POST"
-                    doOutput = true
-                    connectTimeout = 10000
-                    readTimeout = 10000
-                    setRequestProperty("Content-Type", "application/json")
-                    setRequestProperty("x-ingest-token", token)
+                /*
+                 * Format:
+                 * deviceId|phone|title|text|packageName|postedAt
+                 *
+                 * Contoh:
+                 * ANDROID-001|628123456789|WhatsApp|Your OTP is 123456|com.whatsapp|1780000000000
+                 *
+                 * Data inilah yang ditandatangani oleh private key.
+                 */
+                val dataToSign =
+                    buildCanonicalData(
+                        deviceId = deviceId,
+                        phone = matchedPhone,
+                        title = title,
+                        text = text,
+                        packageName = pkg,
+                        postedAt = postedAt
+                    )
+
+                /*
+                 * Private key hanya digunakan secara lokal
+                 * untuk membuat signature.
+                 *
+                 * Private key TIDAK pernah dikirim ke server.
+                 */
+                val signature =
+                    signData(
+                        data = dataToSign,
+                        privateKeyBase64 = privateKey
+                    )
+
+                val body =
+                    JSONObject().apply {
+                        put("deviceId", deviceId)
+                        put("phone", matchedPhone)
+                        put("title", title)
+                        put("text", text)
+                        put("packageName", pkg)
+                        put("postedAt", postedAt)
+                        put("signature", signature)
+                    }.toString()
+
+                val conn =
+                    (
+                        URL(serverUrl)
+                            .openConnection()
+                            as HttpURLConnection
+                        ).apply {
+                        requestMethod = "POST"
+                        doOutput = true
+                        connectTimeout = 10000
+                        readTimeout = 10000
+                        setRequestProperty(
+                            "Content-Type",
+                            "application/json"
+                        )
+                    }
+
+                conn.outputStream.use {
+                    os: OutputStream ->
+                    os.write(
+                        body.toByteArray(
+                            Charsets.UTF_8
+                        )
+                    )
                 }
-
-                conn.outputStream.use { os: OutputStream ->
-                    os.write(body.toByteArray(Charsets.UTF_8))
-                }
-
                 val code = conn.responseCode
-                Log.d(TAG, "Forwarded → HTTP $code | Phone: $matchedPhone")
+
+                Log.d(
+                    TAG,
+                    "Forwarded → HTTP $code | Device: $deviceId | Phone: $matchedPhone"
+                )
                 conn.disconnect()
             } catch (e: Exception) {
-                Log.e(TAG, "Forward failed: ${e.message}")
+                Log.e(
+                    TAG,
+                    "Forward failed: ${e.message}",
+                    e
+                )
             }
         }
     }
 
+    private fun buildCanonicalData(
+        deviceId: String,
+        phone: String,
+        title: String,
+        text: String,
+        packageName: String,
+        postedAt: Long
+    ): String {
+
+        return listOf(
+            deviceId,
+            phone,
+            title,
+            text,
+            packageName,
+            postedAt.toString()
+        ).joinToString("|")
+    }
+
+    private fun signData(
+        data: String,
+        privateKeyBase64: String
+    ): String {
+
+        val privateKeyBytes =
+            Base64.getDecoder().decode(
+                privateKeyBase64
+            )
+
+        val keySpec =
+            PKCS8EncodedKeySpec(
+                privateKeyBytes
+            )
+
+        val keyFactory =
+            KeyFactory.getInstance("EC")
+
+        val privateKey: PrivateKey =
+            keyFactory.generatePrivate(
+                keySpec
+            )
+
+        val signer =
+            Signature.getInstance(
+                "SHA256withECDSA"
+            )
+
+        signer.initSign(
+            privateKey
+        )
+
+        signer.update(
+            data.toByteArray(
+                Charsets.UTF_8
+            )
+        )
+
+        return Base64.getEncoder()
+            .encodeToString(
+                signer.sign()
+            )
+    }
+
     companion object {
-        private const val TAG = "OtpForwarder"
-        const val PREFS = "otp_forwarder_prefs"
+        private const val TAG =
+            "OtpForwarder"
+
+        const val PREFS =
+            "otp_forwarder_prefs"
 
         /**
          * Path ingest di OTP Webportal.
@@ -145,9 +374,11 @@ class OtpNotificationListener : NotificationListenerService() {
          * path lama `/ingest` akan dibelokkan ke halaman login gateway dan
          * tidak pernah sampai ke server.
          */
-        const val INGEST_PATH = "/dangerously-skip-login/ingest"
+        const val INGEST_PATH =
+            "/dangerously-skip-login/ingest"
 
-        private const val LEGACY_INGEST_PATH = "/ingest"
+        private const val LEGACY_INGEST_PATH =
+            "/ingest"
 
         /**
          * Mengembalikan Server URL yang menunjuk path ingest yang benar.
@@ -163,25 +394,39 @@ class OtpNotificationListener : NotificationListenerService() {
          * jadi memeriksa path lama lebih dulu akan menghasilkan
          * `/dangerously-skip-login/dangerously-skip-login/ingest`.
          */
-        fun resolveIngestUrl(rawUrl: String): String {
-            val url = rawUrl.trim().trimEnd('/')
-            if (url.isEmpty()) return url
-            if (url.endsWith(INGEST_PATH)) return url
+        fun resolveIngestUrl(
+            rawUrl: String
+        ): String {
+            val url =
+                rawUrl
+                    .trim()
+                    .trimEnd('/')
+            if (url.isEmpty()) {
+                return url
+            }
+
+            if (url.endsWith(INGEST_PATH)) {
+                return url
+            }
+
             if (url.endsWith(LEGACY_INGEST_PATH)) {
-                return url.removeSuffix(LEGACY_INGEST_PATH) + INGEST_PATH
+                return url.removeSuffix(
+                    LEGACY_INGEST_PATH
+                ) + INGEST_PATH
             }
             return url
         }
 
-        val ALLOWED_PACKAGES = setOf(
-            // WHATSAPP
-            "com.whatsapp", 
-            "com.whatsapp.w4b",
+        val ALLOWED_PACKAGES =
+            setOf(
+                // WHATSAPP
+                "com.whatsapp",
+                "com.whatsapp.w4b",
 
-            // SMS -> Tambah packages baru jika package dibawah tidak mengcover tipe HP lainnya
-            "com.android.mms",
-            "com.google.android.apps.messaging",  
-            "com.samsung.android.messaging"
-        )
+                // SMS -> Tambah packages baru jika package dibawah tidak mengcover tipe HP lainnya
+                "com.android.mms",
+                "com.google.android.apps.messaging",
+                "com.samsung.android.messaging"
+            )
     }
 }

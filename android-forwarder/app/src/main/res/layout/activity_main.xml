@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fillViewport="true">
@@ -18,10 +20,13 @@
             android:textStyle="bold"
             android:paddingBottom="16dp" />
 
+        <!-- ================= SERVER ================= -->
+
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Server URL (mis. http://10.0.2.2:3000/dangerously-skip-login/ingest)" />
+            android:text="Server URL (mis. http://10.0.2.2:3000/dangerously-skip-login/ingest)" 
+            android:textStyle="bold" />
 
         <EditText
             android:id="@+id/serverUrl"
@@ -30,6 +35,7 @@
             android:inputType="textUri" />
 
         <!-- ================= SIM 1 ================= -->
+
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -54,29 +60,30 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal">
-            
+
             <RadioButton
                 android:id="@+id/waNone1"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="None"
                 android:checked="true" />
-                
+
             <RadioButton
                 android:id="@+id/waPersonal1"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="WA Biasa" />
-                
+
             <RadioButton
                 android:id="@+id/waBiz1"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="WA Business" />
+
         </RadioGroup>
 
-
         <!-- ================= SIM 2 ================= -->
+
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -101,39 +108,72 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal">
-            
+
             <RadioButton
                 android:id="@+id/waNone2"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="None"
                 android:checked="true" />
-                
+
             <RadioButton
                 android:id="@+id/waPersonal2"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="WA Biasa" />
-                
+
             <RadioButton
                 android:id="@+id/waBiz2"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="WA Business" />
+
         </RadioGroup>
 
-        <!-- ================= TOKEN ================= -->
+        <!-- ================= DEVICE ID ================= -->
+
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Token (wajib, sama dengan INGEST_TOKEN di server)"
+            android:text="Device ID (Wajib, sama dengan ID di website OTP)"
+            android:textStyle="bold"
             android:paddingTop="16dp" />
 
         <EditText
-            android:id="@+id/token"
+            android:id="@+id/deviceId"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:inputType="text" />
+
+        <!-- ================= PRIVATE KEY ================= -->
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Private Key (Wajib, didapatkan dari website OTP)"
+            android:textStyle="bold"
+            android:paddingTop="16dp" />
+
+        <EditText
+            android:id="@+id/privateKey"
+            android:layout_width="match_parent"
+            android:layout_height="120dp"
+            android:inputType="textMultiLine"
+            android:gravity="top|start"
+            android:singleLine="false"
+            android:scrollHorizontally="false"
+            android:ellipsize="none"
+            android:scrollbars="vertical"
+            android:overScrollMode="ifContentScrolls" />
+
+        <Button
+            android:id="@+id/scanPrivateKey"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Scan QR Code"
+            android:layout_marginTop="8dp" />
+
+        <!-- ================= SAVE ================= -->
 
         <Button
             android:id="@+id/save"
@@ -141,6 +181,8 @@
             android:layout_height="wrap_content"
             android:text="Simpan"
             android:layout_marginTop="20dp" />
+
+        <!-- ================= NOTIFICATION ACCESS ================= -->
 
         <Button
             android:id="@+id/grantAccess"
@@ -150,4 +192,5 @@
             android:layout_marginTop="8dp" />
 
     </LinearLayout>
+
 </ScrollView>
